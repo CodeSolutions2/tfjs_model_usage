@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head></head>
+<body>
+
+<h1>Tensorflow.js models: image processing webapp</h1>
+
+<label for="select_dropdown_option_label">Select a choice:</label>
+<select name="dropdown_options" id="dropdown_options" style="display:block">
+  <option value="---">Select an option</option>
+  <option value="mobilenet_image_NoTransferLearning">mobilenet_image_NoTransferLearning</option>
+  <option value="object_detection_image">object_detection_image</option>
+</select>
+
+<input type="text" name="url" id="url" value="" style="display:none;">
+
+<button id="run_selection" onclick="run_selection()">run_selection</button>
+
+
+<div id="data_display" style="display:block; text-align: left; width: 600px;"></div>
+<br>
+<div id="notification"></div>
+
+
+<!-- ---------------------------------------- -->
+	
+<style>
+div#notification { position: relative; color: #3236a8; }
+</style>
+
+<!-- ---------------------------------------- -->
+
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@1.0.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+
+<!-- ---------------------------------------- -->
+
+<script>
+
+// -----------------------------------------------
+
+window.addEventListener('beforeunload', function() {
+	window.location.href = window.location.href + '?nocache=' + new Date().getTime();
+	document.getElementById("dropdown_options").selectedIndex = 0;
+});
+
+// -------------------------------------------------
+	
+async function processEvent_dropdown_options(event) {
+	
+	if (document.getElementById("dropdown_options").selectedIndex == 0) {
+		document.getElementById("url").style.display = 'none';
+	} else {
+		document.getElementById("url").style.display = 'block';
+	}
+	
+}
+
+document.getElementById("dropdown_options").addEventListener("change", processEvent_dropdown_options, false);
+	
+// -------------------------------------------------
+
+var canvasElement;
+var ctx;
+
+var width_ORG = 256;
+var height_ORG = 256;
+
+var videoElement;
+var sourceElement;
+
+// -------------------------------------------------
+
+async function run_selection() {
+
+  var dropdown_option_type = document.getElementById("dropdown_options").value;
+
+	if (dropdown_option_type == 'mobilenet_image_NoTransferLearning') {
+		await mobilenet_image_NoTransferLearning();
+
+	} else if (dropdown_option_type == 'object_detection_image') {
+		await object_detection_image();
+		
+	} else {
+		document.getElementById("notification") = "No dropdown type selected";
+	}
+
+}
+
+// -----------------------------------------------
+
+async function mobilenet_image_NoTransferLearning() {
+	
+	// Single url
+	[ctx, canvasElement] = await create_dynamic_canvasElement(width_ORG, height_ORG, 'canvasElement_id', 'canvasElement_className', 0);
+
+	const imageElement = new Image();  // image is 'HTMLImageElement'
+	imageElement.setAttribute('crossOrigin', "anonymous");
+	imageElement.setAttribute('headers', {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"});
+	imageElement.onload = async () => { 
+		ctx.drawImage(imageElement, 0, 0, canvasElement.width, canvasElement.height); 
+		await mobilenet_model(imageElement);
+	};
+	imageElement.src = document.getElementById("url").value;
+	
+}  
+
+// -------------------------------------------------
+
+async function object_detection_image() {
+
+	// Single url
+	[ctx, canvasElement] = await create_dynamic_canvasElement(width_ORG, height_ORG, 'canvasElement_id', 'canvasElement_className', 0);
+	
+	const imageElement = new Image();  // image is 'HTMLImageElement'
+	imageElement.setAttribute('crossOrigin', "anonymous");
+	imageElement.setAttribute('headers', {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"});
+	imageElement.onload = async () => { 
+		ctx.drawImage(imageElement, 0, 0, canvasElement.width, canvasElement.height); 
+		await object_detection_model(imageElement);
+	};
+	imageElement.src = document.getElementById("url").value;
+
+}
+	
+// -------------------------------------------------
+
+	
+// -------------------------------------------------
+// IMAGE SUBFUNCTIONS
+// -------------------------------------------------
+async function create_dynamic_canvasElement(width, height, canvasElement_id, canvasElement_className, canvas_number=0) {
+  
+	// Create a canvas element
+	var canvasElement = document.createElement('canvas');
+
+	// Set attributes of the canvas
+	canvasElement.width = width;
+	canvasElement.height = height;
+  	canvasElement.id = canvasElement_id;
+	canvasElement.class = canvasElement_className;
+	
+	// Get the 2D rendering context of the canvas
+	var ctx = canvasElement.getContext("2d");
+
+	// -------------------------
+
+	// (Optional) Parameter to put canvas next to each other
+	if (canvas_number == 0) {
+		canvasElement.style.left = 40+'px';
+	} else {
+		// Append a canvas to the right of an existing canvas
+		let tot = canvas_number*canvasElement.width + 40;
+		canvasElement.style.left = tot+'px';
+	}
+
+	// -------------------------
+
+	// Make a canvas border
+	canvasElement.style.border = '1px solid black';
+
+	return [ctx, canvasElement];
+}
+
+// -------------------------------------------------
+  
+async function mobilenet_model(imageElement) {
+  // Mobilenet
+    // https://github.com/tensorflow/tfjs-models/tree/master/mobilenet
+	await mobilenet.load()
+		.then(model => { model.classify(imageElement)
+			.then(predictions => { 
+				
+				console.log("predictions: ", predictions); 
+				
+				ctx.font = "bold 14px serif";
+				
+				// Make an overlay on top of the image
+				ctx.fillStyle = "rgb(0 0 200 / 50%)";  // Background square over image = blue
+				ctx.fillRect(0, 0, 224, 50);  // fillRect(x, y, width, height)
+
+				// Write on top of the overlay the prediction name
+				ctx.fillStyle = "#ffffff";  // Font color = white
+				ctx.fillText("Mobilenet= "+predictions[0].className, 10, 15); // fillText(text, x, y [, maxWidth])
+				
+				// Store model predictions in array
+				const mobilenet_predictionName = predictions[0].className;
+				console.log("mobilenet_predictionName: ", mobilenet_predictionName);
+				
+				const mobilenet_prediction_probability = predictions[0].probability;
+				console.log("mobilenet_prediction_probability: ", mobilenet_prediction_probability);
+			})
+		});
+
+}
+
+// -----------------------------------------------
+
+async function object_detection_model(imageElement) {
+	
+	await cocoSsd.load()
+	      .then(model => { model.detect(imageElement)
+			      .then(predictions => { 
+
+				      console.log("predictions: ", predictions); 
+				      
+				      predictions.forEach(prediction => {
+					      ctx.beginPath();
+					      ctx.lineWidth = '2';
+					      ctx.strokeStyle = 'red';
+					      ctx.fillStyle = 'red';
+					      ctx.rect(prediction.bbox[0], prediction.bbox[1], prediction.bbox[2], prediction.bbox[3]);
+					      ctx.stroke();
+					      ctx.fillText(`${prediction.class} (${Math.round(prediction.score * 100)}%)`, prediction.bbox[0], prediction.bbox[1] > 10 ? prediction.bbox[1] - 5 : 10);
+				      }); 
+			      });
+	      });
+		    
+}
+	
+// -------------------------------------------------
+
+	
+</script>
+</body>
+</html>
