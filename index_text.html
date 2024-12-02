@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head></head>
+<body>
+
+<h1>Tensorflow.js models: text processing webapp</h1>
+
+<!-- ---------------------------------------- -->
+<!-- View two split window -->
+<div align="left">
+<table id='outline_table' style='text-align: left; width: 500px; display:block'>
+<tr id='outline_tr' >
+
+<th id="input">
+
+<h3>[Step 0] Select an input example to run.</h3>
+
+<label for="select_dropdown_option_label">Select a text processing example and fill-in the fields:</label>
+<select name="dropdown_options" id="dropdown_options" style="display:block">
+  <option value="---">Select an option</option>
+  <option value="toxicity_model">toxicity_model</option>
+  <option value="BERT_model">BERT_model</option>
+  <option value="embeddings_512_per_sentence">embeddings_512_per_sentence</option>
+</select>
+
+<h4 style="display:block;">Text to use for evaluation (ie: toxicity or to answer a question)</h4>
+<textarea id="input_text" wrap="soft" rows="10" cols="100" placeholder="input text" style="display:block; text-align: left; width: 600px; height: 300px;"></textarea>
+
+<h4 id="toxicity_threshold_label" style="display:none;">Amount of toxicity text to filter out: 0 (filter no toxic text) to 1 (filter all toxic text)</h4>
+<input type="text" name="toxicity_threshold" id="toxicity_threshold" value="" style="display:none;">
+
+<h4 id="BERT_q_label" style="display:none;">Question (the input text will be used to respond to the question)</h4>
+<input type="text" name="BERT_q" id="BERT_q" value="" style="display:none; width: 600px;">
+
+<button id="run_selection" onclick="run_selection()">run_selection</button>
+
+</th>
+
+<!-- ---------------------------------------- -->
+
+<th id="outputs">
+
+<h3>[Step 1] View output result.</h3>
+<div id="data_display" style="display:block; text-align: left; width: 600px;"></div>
+<br>
+<div id="notification"></div>
+</th>
+	
+<!-- ---------------------------------------- -->
+	
+</tr>
+</table>
+
+<!-- ---------------------------------------- -->
+	
+<style>
+table {vertical-align: top; border-collapse: collapse; position: relative; z-index: 0; border: 1px solid black;}
+table#outline_table {border: 0px solid black;}
+	
+tr {vertical-align: top; border: 1px solid black; padding: 30px 30px; }
+tr#outline_tr {border: 0px solid black;}
+	
+th, td {vertical-align: top; border: 1px solid black; padding: 10px; }
+th#input {border: 0px solid black;}
+th#outputs {border: 0px solid black;}
+
+div#notification { position: relative; color: #3236a8; }
+	
+.highlight0 { background-color: #ed968e; }
+</style>
+
+<!-- ---------------------------------------- -->
+  
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/toxicity"></script>
+  
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/qna"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder"></script>
+
+	
+<!-- ---------------------------------------- -->
+
+<script>
+
+// -----------------------------------------------
+
+window.addEventListener('beforeunload', function() {
+  window.location.href = window.location.href + '?nocache=' + new Date().getTime();
+  document.getElementById("dropdown_options").selectedIndex = 0;
+});
+
+// -------------------------------------------------
+	
+async function processEvent_dropdown_options(event) {
+	
+	if (document.getElementById("dropdown_options").selectedIndex == 1) {
+		document.getElementById("toxicity_threshold_label").style.display = 'block';
+		document.getElementById("toxicity_threshold").style.display = 'block';
+		document.getElementById("BERT_q_label").style.display = 'none';
+		document.getElementById("BERT_q").style.display = 'none';
+
+	} else if (document.getElementById("dropdown_options").selectedIndex == 2) {
+		document.getElementById("toxicity_threshold_label").style.display = 'none';
+		document.getElementById("toxicity_threshold").style.display = 'none';
+		document.getElementById("BERT_q_label").style.display = 'block';
+		document.getElementById("BERT_q").style.display = 'block';
+		
+	} else {
+		document.getElementById("toxicity_threshold_label").style.display = 'none';
+		document.getElementById("toxicity_threshold").style.display = 'none';
+		document.getElementById("BERT_q_label").style.display = 'none';
+		document.getElementById("BERT_q").style.display = 'none';
+	}
+	
+}
+
+document.getElementById("dropdown_options").addEventListener("change", processEvent_dropdown_options, false);
+	
+// -------------------------------------------------
+
+async function run_selection() {
+	
+	// Put in a function in <script>
+	var dropdown_option_type = document.getElementById("dropdown_options").value;
+
+	if (dropdown_option_type == 'toxicity_model') {
+		
+		const threshold = document.getElementById("toxicity_threshold").value;
+
+		toxicity.load(threshold)
+			.then(model => {
+				const input = document.getElementById("input_text").value;
+				model.classify(input)
+					.then(predictions => {
+						// console.log("predictions: ", predictions);
+
+						var obj_simple = {};
+						for (let i=0; i<predictions.length; i++) {
+
+							var content_name = predictions[i].label;
+							// console.log("content_name: ", content_name);
+
+							var content_probability = predictions[i].results[0].probabilities[1] * 100;
+							// console.log("content_probability: ", content_probability);
+							
+							if (predictions[i].results[0].probabilities[0] > predictions[i].results[0].probabilities[1]) {
+								obj_simple[content_name] = {yesORno: 'no', percentage: content_probability};
+							} else {
+								obj_simple[content_name] = {yesORno: 'yes', percentage: content_probability};
+							}
+						}
+						// console.log("obj_simple: ", obj_simple);
+
+						// Put object results in a table
+						generateTable_dynamically_for_object_nested2times(obj_simple);
+						
+					});
+			});
+
+	} else if (dropdown_option_type == 'BERT_model') {
+	
+		// https://github.com/tensorflow/tfjs-models/tree/master/qna
+		// A compressed version of BERT, MobileBERT, that runs 4x faster and has 4x smaller model size
+		// Trained on SQuAD dataset constructed from Wikipedia question-answer pairs
+		qna.load().then(model => {
+			const Q = document.getElementById("BERT_q").value;
+			const input_text_to_use_to_respond_to_Q = document.getElementById("input_text").value;
+			model.findAnswers(Q, input_text_to_use_to_respond_to_Q).then(output => {
+				console.log('output: ', output);
+				
+				// Take the best response
+				const best_response = output[0].text;
+				console.log("best_response: ", best_response);
+
+				document.getElementById('data_display').innerHTML = best_response;
+			});
+		});
+
+
+
+	} else if (dropdown_option_type == 'embeddings_512_per_sentence') {
+
+		// https://github.com/tensorflow/tfjs-models/tree/master/universal-sentence-encoder
+		// Load the Universal Sentence Encoder model
+		use.load().then(model => {
+			// Embed an array of sentences.
+			const input_text = document.getElementById("input_text").value;
+			const sentences = input_text.split('. ');
+			console.log('sentences: ', sentences);
+			
+			model.embed(sentences).then(embeddings => {
+				console.log("embeddings: ", embeddings); // 2D tensor [sentences.length, 512]
+			});
+		});
+	
+		
+	} else {
+		document.getElementById('notification').innerHTML = "Please select a drop down option type."; 
+	}
+
+
+}
+
+// -------------------------------------------------
+	
+	async function generateTable_dynamically_for_object_nested2times(obj) {
+	  
+	  const tbl = document.createElement("table");
+	  const tblBody = document.createElement("tbody");
+	  
+	  const keys = Object.keys(obj);
+	  
+	  // Create row cells dynamically
+	  for (let i=0; i < keys.length; i++){
+		  // create a table row
+		  const row = document.createElement("tr");
+
+		  // obtain nested keys of each key
+		  var nested_keys = Object.keys(obj[keys[i]]);
+		  
+		  for (let j=0; j < nested_keys.length+1; j++){
+			  const cell = document.createElement("td");
+			  var cellText;
+			  if (j == 0) {
+				  cellText = document.createTextNode(`${keys[i]}`);
+			  } else {
+				  var cellText = document.createTextNode(`${obj[keys[i]][nested_keys[j-1]]}`);
+			  }
+			  cell.appendChild(cellText);
+			  row.appendChild(cell);
+		  }
+		  
+		  // add a row to the end of the table
+		  tblBody.appendChild(row);
+	  }
+	  tbl.appendChild(tblBody);
+	  
+	  document.getElementById('data_display').appendChild(tbl);
+  }  
+
+// -----------------------------------------------
+
+
+  
+</script>
+</body>
+</html>
