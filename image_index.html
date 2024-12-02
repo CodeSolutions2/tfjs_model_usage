@@ -10,8 +10,13 @@
   <option value="---">Select an option</option>
   <option value="mobilenet_image_NoTransferLearning">mobilenet_image_NoTransferLearning</option>
   <option value="object_detection_image">object_detection_image</option>
+  <option value="posenet_model_singlePose">posenet_model_singlePose</option>
+  <option value="posenet_model_multiplePose">posenet_model_multiplePose</option>
+  <option value="posenet_detection_model">posenet_detection_model</option>
 </select>
 
+	
+<h4 id="url_label" style="display:none;">Enter a url of the image:</h4>
 <input type="text" name="url" id="url" value="" style="display:none;">
 
 <button id="run_selection" onclick="run_selection()">run_selection</button>
@@ -35,7 +40,8 @@ div#notification { position: relative; color: #3236a8; }
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@1.0.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
-
+<script src="https://unpkg.com/@tensorflow-models/posenet"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
 <!-- ---------------------------------------- -->
 
@@ -54,8 +60,10 @@ async function processEvent_dropdown_options(event) {
 	
 	if (document.getElementById("dropdown_options").selectedIndex == 0) {
 		document.getElementById("url").style.display = 'none';
+		document.getElementById("url_label").style.display = 'none';
 	} else {
 		document.getElementById("url").style.display = 'block';
+		document.getElementById("url_label").style.display = 'block';
 	}
 	
 }
@@ -84,6 +92,15 @@ async function run_selection() {
 
 	} else if (dropdown_option_type == 'object_detection_image') {
 		await object_detection_image();
+
+	} else if (dropdown_option_type == 'posenet_model_singlePose') {
+		await posenet_model_singlePose();
+
+	} else if (dropdown_option_type == 'posenet_model_multiplePose') {
+		await posenet_model_multiplePose();
+
+	} else if (dropdown_option_type == 'posenet_detection_model') {
+		await posenet_detection_model();
 		
 	} else {
 		document.getElementById("notification") = "No dropdown type selected";
@@ -91,10 +108,13 @@ async function run_selection() {
 
 }
 
-// -----------------------------------------------
-
-async function mobilenet_image_NoTransferLearning() {
+// -------------------------------------------------
 	
+async function mobilenet_image_NoTransferLearning() {
+
+	// Example (a post-it note): https://storage.googleapis.com/memetics-motivation/success_512x512_0.png
+
+	// Way 0
 	// Single url
 	[ctx, canvasElement] = await create_dynamic_canvasElement(width_ORG, height_ORG, 'canvasElement_id', 'canvasElement_className', 0);
 
@@ -113,6 +133,8 @@ async function mobilenet_image_NoTransferLearning() {
 
 async function object_detection_image() {
 
+	// Example (an apple): https://raw.githubusercontent.com/CodeSolutions2/image_classification/main/apple3D_1.png
+
 	// Single url
 	[ctx, canvasElement] = await create_dynamic_canvasElement(width_ORG, height_ORG, 'canvasElement_id', 'canvasElement_className', 0);
 	
@@ -128,6 +150,71 @@ async function object_detection_image() {
 }
 	
 // -------------------------------------------------
+
+async function posenet_model_singlePose() {
+
+	// Example (a person running) : https://storage.googleapis.com/image-segmentation-mask-samples/mid_size2_image_segmentation.png
+	
+	// Single url
+	[ctx, canvasElement] = await create_dynamic_canvasElement(width_ORG, height_ORG, 'canvasElement_id', 'canvasElement_className', 0);
+	
+	const imageElement = new Image();  // image is 'HTMLImageElement'
+	imageElement.setAttribute('crossOrigin', "anonymous");
+	imageElement.setAttribute('headers', {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"});
+	imageElement.onload = async () => { 
+		ctx.drawImage(imageElement, 0, 0, canvasElement.width, canvasElement.height); 
+		await posenet_model(imageElement, "single");
+	};
+	imageElement.src = document.getElementById("url").value;
+
+}
+
+// -------------------------------------------------
+  
+async function posenet_model_multiplePose() {
+	
+	// Example (a person running) : https://storage.googleapis.com/image-segmentation-mask-samples/mid_size2_image_segmentation.png
+	
+	// Single url
+	[ctx, canvasElement] = await create_dynamic_canvasElement(width_ORG, height_ORG, 'canvasElement_id', 'canvasElement_className', 0);
+	
+	const imageElement = new Image();  // image is 'HTMLImageElement'
+	imageElement.setAttribute('crossOrigin', "anonymous");
+	imageElement.setAttribute('headers', {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"});
+	imageElement.onload = async () => { 
+		ctx.drawImage(imageElement, 0, 0, canvasElement.width, canvasElement.height); 
+		await posenet_model(imageElement, "multiple");
+	};
+	imageElement.src = document.getElementById("url").value;
+
+}
+	
+// -------------------------------------------------
+
+async function posenet_detection_model() {
+	
+	// Example (a person running) : https://storage.googleapis.com/image-segmentation-mask-samples/mid_size2_image_segmentation.png
+	
+	// Single url
+	[ctx, canvasElement] = await create_dynamic_canvasElement(width_ORG, height_ORG, 'canvasElement_id', 'canvasElement_className', 0);
+	
+	const imageElement = new Image();  // image is 'HTMLImageElement'
+	imageElement.setAttribute('crossOrigin', "anonymous");
+	imageElement.setAttribute('headers', {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"});
+	imageElement.onload = async () => { 
+		ctx.drawImage(imageElement, 0, 0, canvasElement.width, canvasElement.height); 
+		await posenet_model(imageElement, "multiple");
+	};
+	imageElement.src = document.getElementById("url").value;
+
+}
+	
+// -------------------------------------------------
+	
+
+
+
+  
 
 	
 // -------------------------------------------------
@@ -207,19 +294,60 @@ async function object_detection_model(imageElement) {
 			      .then(predictions => { 
 
 				      console.log("predictions: ", predictions); 
-				      
-				      predictions.forEach(prediction => {
+
+				      for (let i=0; i<predictions.length; i++) {
 					      ctx.beginPath();
 					      ctx.lineWidth = '2';
 					      ctx.strokeStyle = 'red';
 					      ctx.fillStyle = 'red';
-					      ctx.rect(prediction.bbox[0], prediction.bbox[1], prediction.bbox[2], prediction.bbox[3]);
+					      ctx.rect(predictions[i].bbox[0], predictions[i].bbox[1], predictions[i].bbox[2], predictions[i].bbox[3]);
 					      ctx.stroke();
-					      ctx.fillText(`${prediction.class} (${Math.round(prediction.score * 100)}%)`, prediction.bbox[0], prediction.bbox[1] > 10 ? prediction.bbox[1] - 5 : 10);
-				      }); 
+					      ctx.fillText(`${predictions[i].class} (${Math.round(predictions[i].score * 100)}%)`, predictions[i].bbox[0], predictions[i].bbox[1] > 10 ? predictions[i].bbox[1] - 5 : 10);
+				      }
+				      
 			      });
 	      });
 		    
+}
+	
+// -------------------------------------------------
+  
+async function posenet_model(imageElement, pose_type) {
+
+	if (pose_type == "single") {
+		
+		const net = await posenet.load();
+
+		const scaleFactor = 0.50;
+		const flipHorizontal = false;
+		const outputStride = 16;
+		
+		// Estimate a single pose
+		const pose = await net.estimateSinglePose(imageElement, scaleFactor, flipHorizontal, outputStride);
+		console.log("pose: ", pose); 
+
+	} else if (pose_type == "multiple") {
+		
+		const net = await posenet.load();
+
+		const scaleFactor = 0.50;
+		const flipHorizontal = false;
+		const outputStride = 16;
+		const maxPoseDetections = 5;
+		const scoreThreshold = 0.5; // minimum confidence of the root part of a pose
+		const nmsRadius = 20; // minimum distance in pixels between the root parts of pose
+  
+		// Estimate multiple person poses
+		const pose = await net.estimateMultiplePoses(imageElement, scaleFactor, flipHorizontal, outputStride, maxPoseDetections, scoreThreshold, nmsRadius); 
+		console.log("pose: ", pose);
+
+	} else {
+
+		const model = poseDetection.SupportedModels.MoveNet;
+		const detector = await poseDetection.createDetector(model);
+		const poses = await detector.estimatePoses(imageElement);
+	}
+    
 }
 	
 // -------------------------------------------------
